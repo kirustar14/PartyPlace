@@ -4,8 +4,6 @@ import OpenAI from 'openai';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
 interface ParsedQuery {
   budget?: number;
   guestCount?: number;
@@ -35,49 +33,51 @@ interface ValidationResult {
 @Injectable()
 export class SearchService {
   private venues: Venue[];
+  private client: OpenAI | null = null;
 
   constructor() {
     const venuesPath = path.join(__dirname, '../../../..', 'venues.json');
     this.venues = JSON.parse(fs.readFileSync(venuesPath, 'utf-8'));
+    try {
+      this.client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    } catch {
+      this.client = null;
+    }
   }
 
   async search(query: string) {
-    // 1. Parse with OpenAI
     const parsed = await this.parseQuery(query);
 
-    // 2. Validate
     const validation = this.validate(parsed);
     if (!validation.valid) {
       return { valid: false, reason: validation.reason, suggestion: validation.suggestion, parsed };
     }
 
-    // 3. Filter venues
     const results = this.filterVenues(parsed);
-
     return { valid: true, parsed, results };
   }
 
   private async parseQuery(query: string): Promise<ParsedQuery> {
-    const response = await client.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: `Extract event details from the user query and return ONLY valid JSON with these fields:
-          - budget (number or null): their budget in dollars
-          - guestCount (number or null): number of guests
-          - location (string or null): NYC neighborhood
-          - occasion (string or null): type of event e.g. Birthday, Wedding, etc
-          - day (string or null): day of week e.g. Friday, Saturday
-          - time (string or null): one of morning/afternoon/evening/night
-          Return only JSON, no markdown.`,
-        },
-        { role: 'user', content: query },
-      ],
-    });
-
-    const text = response.choices[0].message.content || '{}';
+    if (!this.client) return {};
     try {
+      const response = await this.client.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `Extract event details from the user query and return ONLY valid JSON with these fields:
+            - budget (number or null): their budget in dollars
+            - guestCount (number or null): number of guests
+            - location (string or null): NYC neighborhood
+            - occasion (string or null): type of event e.g. Birthday, Wedding, etc
+            - day (string or null): day of week e.g. Friday, Saturday
+            - time (string or null): one of morning/afternoon/evening/night
+            Return only JSON, no markdown.`,
+          },
+          { role: 'user', content: query },
+        ],
+      });
+      const text = response.choices[0].message.content || '{}';
       return JSON.parse(text);
     } catch {
       return {};
@@ -85,19 +85,17 @@ export class SearchService {
   }
 
   private validate(parsed: ParsedQuery): ValidationResult {
-    // Rule 1: Weekend bookings require min $1500 budget
     const weekendDays = ['Friday', 'Saturday', 'Sunday'];
     if (parsed.day && weekendDays.includes(parsed.day)) {
       if (parsed.budget && parsed.budget < 1500) {
         return {
           valid: false,
           reason: 'Weekend bookings require a minimum budget of $1,500.',
-          suggestion: `Try increasing your budget to at least $1,500, or consider a weekday booking.`,
+          suggestion: 'Try increasing your budget to at least $1,500, or consider a weekday booking.',
         };
       }
     }
 
-    // Rule 2: Guest count must be reasonable
     if (parsed.guestCount && parsed.guestCount > 150) {
       return {
         valid: false,
@@ -106,7 +104,6 @@ export class SearchService {
       };
     }
 
-    // Rule 3: Budget can't be negative or zero
     if (parsed.budget !== undefined && parsed.budget !== null && parsed.budget <= 0) {
       return {
         valid: false,
