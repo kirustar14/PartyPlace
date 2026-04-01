@@ -16,8 +16,7 @@ Use the OpenAI API to convert the user's input into a structured format.
 
 Use the following API key for your requests:
 
-OPENAI_API_KEY=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
-
+OPENAI_API_KEY=""
 The output should include fields such as:
 
 - budget
