@@ -29,3 +29,62 @@ PartyPlace lets users search for venues using plain English. Describe your event
 - Budget must be greater than $0
 
 ## Project Structure
+```
+PartyPlace/
+├── backend/          # NestJS API
+│   └── src/
+│       └── search/   # Search module (controller, service)
+├── frontend/         # Next.js app
+│   └── app/
+│       ├── page.tsx        # Homepage with search + all venues
+│       └── results/        # Results page with applied filters
+└── venues.json       # Mock venue dataset (30 NYC venues)
+```
+
+## Getting Started
+
+### Prerequisites
+- Node.js v20+
+- OpenAI API key
+
+### Backend
+```bash
+cd backend
+npm install
+echo "OPENAI_API_KEY=your-key-here" > .env
+npm run start:dev
+# Runs on http://localhost:3001
+```
+
+### Frontend
+```bash
+cd frontend
+npm install
+npm run dev
+# Runs on http://localhost:3000
+```
+
+## API
+
+### `POST /search`
+Takes a natural language query and returns matched venues.
+
+**Request**
+```json
+{ "query": "Birthday party for 40 people in SoHo on Friday evening" }
+```
+
+**Response**
+```json
+{
+  "valid": true,
+  "parsed": {
+    "occasion": "Birthday",
+    "guestCount": 40,
+    "location": "SoHo",
+    "day": "Friday",
+    "time": "evening"
+  },
+  "results": [...]
+}
+```
